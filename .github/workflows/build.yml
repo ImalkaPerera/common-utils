@@ -21,23 +21,28 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Create truststore (IMPORTANT FIX)
+      # 3. Create custom truststore (SAFE + FIXED)
       - name: Create truststore with Nexus cert
         run: |
-          # Copy default Java truststore (keeps Maven Central working)
-          cp $JAVA_HOME/lib/security/cacerts nexus-truststore.jks
+          TRUSTSTORE=/tmp/nexus-truststore.jks
 
-          # Add Nexus certificate
-          echo "${{ secrets.NEXUS_CERT }}" > nexus.crt
+          # Copy default Java truststore
+          cp "$JAVA_HOME/lib/security/cacerts" "$TRUSTSTORE"
 
+          # Write Nexus certificate
+          echo "${{ secrets.NEXUS_CERT }}" > /tmp/nexus.crt
+
+          # Import Nexus cert
           keytool -import -trustcacerts \
             -alias nexus \
-            -file nexus.crt \
-            -keystore nexus-truststore.jks \
+            -file /tmp/nexus.crt \
+            -keystore "$TRUSTSTORE" \
             -storepass changeit \
             -noprompt
 
-      # 4. Configure Maven settings
+          echo "TRUSTSTORE=$TRUSTSTORE" >> $GITHUB_ENV
+
+      # 4. Configure Maven credentials
       - name: Configure Maven settings.xml
         run: |
           mkdir -p ~/.m2
@@ -66,5 +71,5 @@ jobs:
         run: |
           cd "Maven Project"
           mvn clean deploy -U \
-            -Djavax.net.ssl.trustStore=../nexus-truststore.jks \
+            -Djavax.net.ssl.trustStore=$TRUSTSTORE \
             -Djavax.net.ssl.trustStorePassword=changeit
