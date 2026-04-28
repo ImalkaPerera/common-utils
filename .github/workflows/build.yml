@@ -1,24 +1,70 @@
-Run cd "Maven Project"
-[INFO] Scanning for projects...
-[INFO] 
-[INFO] -----------------------< com.learn:common-utils >-----------------------
-[INFO] Building common-utils 0.0.1-SNAPSHOT
-[INFO]   from pom.xml
-[INFO] --------------------------------[ jar ]---------------------------------
-Downloading from central: https://repo.maven.apache.org/maven2/org/apache/maven/plugins/maven-clean-plugin/3.2.0/maven-clean-plugin-3.2.0.pom
-[INFO] ------------------------------------------------------------------------
-[INFO] BUILD FAILURE
-[INFO] ------------------------------------------------------------------------
-[INFO] Total time:  0.623 s
-[INFO] Finished at: 2026-04-28T12:47:26Z
-[INFO] ------------------------------------------------------------------------
-Error:  Plugin org.apache.maven.plugins:maven-clean-plugin:3.2.0 or one of its dependencies could not be resolved:
-Error:  	The following artifacts could not be resolved: org.apache.maven.plugins:maven-clean-plugin:pom:3.2.0 (absent): Could not transfer artifact org.apache.maven.plugins:maven-clean-plugin:pom:3.2.0 from/to central (https://repo.maven.apache.org/maven2): PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
-Error:  -> [Help 1]
-Error:  
-Error:  To see the full stack trace of the errors, re-run Maven with the -e switch.
-Error:  Re-run Maven using the -X switch to enable full debug logging.
-Error:  
-Error:  For more information about the errors and possible solutions, please read the following articles:
-Error:  [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/PluginResolutionException
-Error: Process completed with exit code 1.
+name: Build and Deploy common-utils
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2. Setup Java
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 3. Create truststore (IMPORTANT FIX)
+      - name: Create truststore with Nexus cert
+        run: |
+          # Copy default Java truststore (keeps Maven Central working)
+          cp $JAVA_HOME/lib/security/cacerts nexus-truststore.jks
+
+          # Add Nexus certificate
+          echo "${{ secrets.NEXUS_CERT }}" > nexus.crt
+
+          keytool -import -trustcacerts \
+            -alias nexus \
+            -file nexus.crt \
+            -keystore nexus-truststore.jks \
+            -storepass changeit \
+            -noprompt
+
+      # 4. Configure Maven settings
+      - name: Configure Maven settings.xml
+        run: |
+          mkdir -p ~/.m2
+          cat <<EOF > ~/.m2/settings.xml
+          <settings>
+            <servers>
+              <server>
+                <id>nexus-snapshots</id>
+                <username>${NEXUS_USER}</username>
+                <password>${NEXUS_TOKEN}</password>
+              </server>
+              <server>
+                <id>nexus-releases</id>
+                <username>${NEXUS_USER}</username>
+                <password>${NEXUS_TOKEN}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
+
+      # 5. Build and Deploy
+      - name: Build and Deploy
+        run: |
+          cd "Maven Project"
+          mvn clean deploy -U \
+            -Djavax.net.ssl.trustStore=../nexus-truststore.jks \
+            -Djavax.net.ssl.trustStorePassword=changeit
