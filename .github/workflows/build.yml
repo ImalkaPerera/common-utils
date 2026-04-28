@@ -19,29 +19,34 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 🔥 Create TRUSTSTORE safely in runner temp
-      - name: Create truststore
+      # 1) Create truststore in WORKSPACE (always writable)
+      - name: Create truststore (workspace)
         run: |
-          TRUSTSTORE=$RUNNER_TEMP/nexus-truststore.jks
+          TRUSTSTORE="$GITHUB_WORKSPACE/nexus-truststore.jks"
 
-          # Copy default Java truststore
+          # Copy default cacerts (keeps Maven Central working)
           cp "$JAVA_HOME/lib/security/cacerts" "$TRUSTSTORE"
 
-          # Write cert
-          echo "${{ secrets.NEXUS_CERT }}" > $RUNNER_TEMP/nexus.crt
+          # Verify it exists and is writable
+          ls -l "$TRUSTSTORE"
+          test -w "$TRUSTSTORE"
 
-          # Import cert
+          # Write Nexus cert
+          echo "${{ secrets.NEXUS_CERT }}" > "$GITHUB_WORKSPACE/nexus.crt"
+
+          # Import Nexus cert
           keytool -import -trustcacerts \
             -alias nexus \
-            -file $RUNNER_TEMP/nexus.crt \
+            -file "$GITHUB_WORKSPACE/nexus.crt" \
             -keystore "$TRUSTSTORE" \
             -storepass changeit \
             -noprompt
 
+          # Export for next steps
           echo "TRUSTSTORE=$TRUSTSTORE" >> $GITHUB_ENV
 
-      # Maven settings
-      - name: Configure Maven
+      # 2) Configure Maven credentials
+      - name: Configure Maven settings.xml
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -64,10 +69,10 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
-      # Build
+      # 3) Build + Deploy with explicit truststore
       - name: Build and Deploy
         run: |
           cd "Maven Project"
           mvn clean deploy -U \
-            -Djavax.net.ssl.trustStore=$TRUSTSTORE \
+            -Djavax.net.ssl.trustStore="$TRUSTSTORE" \
             -Djavax.net.ssl.trustStorePassword=changeit
