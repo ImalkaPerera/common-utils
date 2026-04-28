@@ -10,30 +10,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
+      # 1) Checkout
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Setup Java
+      # 2) Setup Java
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Trust Nexus self-signed certificate
-      - name: Trust Nexus Certificate
+      # 3) Create custom truststore (DO NOT touch system cacerts)
+      - name: Create custom truststore
         run: |
           echo "${{ secrets.NEXUS_CERT }}" > nexus.crt
           keytool -import -trustcacerts \
             -alias nexus \
             -file nexus.crt \
-            -keystore $JAVA_HOME/lib/security/cacerts \
+            -keystore nexus-truststore.jks \
             -storepass changeit \
             -noprompt
 
-      # 4. Configure Maven settings.xml
-      - name: Configure Maven settings
+      # 4) Configure Maven credentials
+      - name: Configure Maven settings.xml
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -56,8 +56,10 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
-      # 5. Build and Deploy
+      # 5) Build + Deploy using custom truststore
       - name: Build and Deploy
         run: |
           cd "Maven Project"
-          mvn clean deploy -U
+          mvn clean deploy -U \
+            -Djavax.net.ssl.trustStore=../nexus-truststore.jks \
+            -Djavax.net.ssl.trustStorePassword=changeit
