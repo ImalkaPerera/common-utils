@@ -19,13 +19,29 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Write cert to file
-      - name: Write Nexus cert
+      # 🔥 Create TRUSTSTORE safely in runner temp
+      - name: Create truststore
         run: |
-          echo "${{ secrets.NEXUS_CERT }}" > nexus.crt
+          TRUSTSTORE=$RUNNER_TEMP/nexus-truststore.jks
 
-      # Configure Maven credentials
-      - name: Configure Maven settings.xml
+          # Copy default Java truststore
+          cp "$JAVA_HOME/lib/security/cacerts" "$TRUSTSTORE"
+
+          # Write cert
+          echo "${{ secrets.NEXUS_CERT }}" > $RUNNER_TEMP/nexus.crt
+
+          # Import cert
+          keytool -import -trustcacerts \
+            -alias nexus \
+            -file $RUNNER_TEMP/nexus.crt \
+            -keystore "$TRUSTSTORE" \
+            -storepass changeit \
+            -noprompt
+
+          echo "TRUSTSTORE=$TRUSTSTORE" >> $GITHUB_ENV
+
+      # Maven settings
+      - name: Configure Maven
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -48,10 +64,10 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
-      # Build using JVM SSL override
+      # Build
       - name: Build and Deploy
         run: |
           cd "Maven Project"
           mvn clean deploy -U \
-            -Djavax.net.ssl.trustStoreType=PEM \
-            -Djavax.net.ssl.trustStore=nexus.crt
+            -Djavax.net.ssl.trustStore=$TRUSTSTORE \
+            -Djavax.net.ssl.trustStorePassword=changeit
