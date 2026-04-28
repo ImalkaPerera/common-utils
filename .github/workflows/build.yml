@@ -19,22 +19,21 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 1) Create truststore in WORKSPACE (always writable)
-      - name: Create truststore (workspace)
+      # 🔥 FIXED truststore creation
+      - name: Create truststore
         run: |
           TRUSTSTORE="$GITHUB_WORKSPACE/nexus-truststore.jks"
 
-          # Copy default cacerts (keeps Maven Central working)
+          # Copy default truststore
           cp "$JAVA_HOME/lib/security/cacerts" "$TRUSTSTORE"
 
-          # Verify it exists and is writable
-          ls -l "$TRUSTSTORE"
-          test -w "$TRUSTSTORE"
+          # 🔥 CRITICAL FIX
+          chmod +w "$TRUSTSTORE"
 
           # Write Nexus cert
           echo "${{ secrets.NEXUS_CERT }}" > "$GITHUB_WORKSPACE/nexus.crt"
 
-          # Import Nexus cert
+          # Import cert
           keytool -import -trustcacerts \
             -alias nexus \
             -file "$GITHUB_WORKSPACE/nexus.crt" \
@@ -42,11 +41,9 @@ jobs:
             -storepass changeit \
             -noprompt
 
-          # Export for next steps
           echo "TRUSTSTORE=$TRUSTSTORE" >> $GITHUB_ENV
 
-      # 2) Configure Maven credentials
-      - name: Configure Maven settings.xml
+      - name: Configure Maven
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -69,7 +66,6 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
-      # 3) Build + Deploy with explicit truststore
       - name: Build and Deploy
         run: |
           cd "Maven Project"
