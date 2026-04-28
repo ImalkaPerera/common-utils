@@ -20,6 +20,9 @@ jobs:
           java-version: '17'
 
       - name: Configure Maven settings
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -42,7 +45,4 @@ jobs:
       - name: Build and Deploy
         run: |
           cd "Maven Project"
-          mvn clean deploy
-        env:
-          NEXUS_USER: ${{ secrets.NEXUS_USER }}
-          NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
+          mvn clean deploy -B
