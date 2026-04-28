@@ -14,11 +14,11 @@
     <distributionManagement>
         <repository>
             <id>nexus-releases</id>
-            <url>https://18.234.35.226:9090/repository/maven-releases/</url>
+            <url>https://18.234.35.226/nexus/repository/maven-releases/</url>
         </repository>
         <snapshotRepository>
             <id>nexus-snapshots</id>
-            <url>https://18.234.35.226:9090/repository/maven-snapshots/</url>
+            <url>https://18.234.35.226/nexus/repository/maven-snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
 
