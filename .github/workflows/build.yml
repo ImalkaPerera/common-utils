@@ -10,19 +10,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout code
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. Setup Java
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # 3. Trust Nexus self-signed certificate
+      - name: Trust Nexus Certificate
+        run: |
+          echo "${{ secrets.NEXUS_CERT }}" > nexus.crt
+          keytool -import -trustcacerts \
+            -alias nexus \
+            -file nexus.crt \
+            -keystore $JAVA_HOME/lib/security/cacerts \
+            -storepass changeit \
+            -noprompt
+
+      # 4. Configure Maven settings.xml
       - name: Configure Maven settings
-        env:
-          NEXUS_USER: ${{ secrets.NEXUS_USER }}
-          NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
         run: |
           mkdir -p ~/.m2
           cat <<EOF > ~/.m2/settings.xml
@@ -41,8 +52,12 @@ jobs:
             </servers>
           </settings>
           EOF
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USER }}
+          NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
+      # 5. Build and Deploy
       - name: Build and Deploy
         run: |
           cd "Maven Project"
-          mvn clean deploy -B
+          mvn clean deploy -U
