@@ -15,6 +15,6 @@ spec:
       containers:
         - name: user-service
           image: user-service:1.0
-          imagePullPolicy: Never   # 🔥 IMPORTANT for kind
+          imagePullPolicy: Never   #  IMPORTANT for kind
           ports:
             - containerPort: 8080
