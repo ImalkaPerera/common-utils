@@ -1,9 +1,14 @@
 # ---- Build Stage ----
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS build
 WORKDIR /build
+
 # Add Nexus certificate to Java truststore (correct path for Eclipse Temurin Alpine)
 COPY nexus.crt /usr/local/share/ca-certificates/nexus.crt
 RUN keytool -importcert -noprompt -trustcacerts -alias nexus -file /usr/local/share/ca-certificates/nexus.crt -keystore /opt/java/openjdk/lib/security/cacerts -storepass changeit
+
+# Add Maven settings.xml for authenticated repository access
+COPY settings.xml /root/.m2/settings.xml
+
 COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
