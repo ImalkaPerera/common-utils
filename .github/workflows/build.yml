@@ -1,6 +1,9 @@
 name: Build and Deploy common-utils
 
+# This workflow builds, tests, bumps version, and deploys the Maven Project when changes occur in the Maven Project folder.
+
 on:
+# Trigger only when changes are made in the Maven Project folder
   push:
     branches:
       - main
@@ -20,6 +23,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Step 1: Build and test the Maven Project to ensure no errors before version bump
+      - name: Java Build Check
+        run: |
+          cd "Maven Project"
+          mvn clean verify
+
+      # Step 2: Bump the Maven Project version if build succeeds
       - name: Bump Maven version
         run: |
           cd "Maven Project"
@@ -28,6 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Step 3: Commit and push the version bump to the repository
       - name: Commit and push version bump
         run: |
           git add "Maven Project/pom.xml"
@@ -36,13 +47,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Step 4: Set up Java for deployment
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 🔥 FIXED truststore creation
+      # Step 5: Create a truststore and import the Nexus certificate
       - name: Create truststore
         run: |
           TRUSTSTORE="$GITHUB_WORKSPACE/nexus-truststore.jks"
@@ -50,7 +62,7 @@ jobs:
           # Copy default truststore
           cp "$JAVA_HOME/lib/security/cacerts" "$TRUSTSTORE"
 
-          # 🔥 CRITICAL FIX
+          # Make truststore writable
           chmod +w "$TRUSTSTORE"
 
           # Write Nexus cert
@@ -66,6 +78,7 @@ jobs:
 
           echo "TRUSTSTORE=$TRUSTSTORE" >> $GITHUB_ENV
 
+      # Step 6: Configure Maven to use Nexus credentials
       - name: Configure Maven
         run: |
           mkdir -p ~/.m2
@@ -89,6 +102,7 @@ jobs:
           NEXUS_USER: ${{ secrets.NEXUS_USER }}
           NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
+      # Step 7: Build and deploy the Maven Project to Nexus
       - name: Build and Deploy
         run: |
           cd "Maven Project"
