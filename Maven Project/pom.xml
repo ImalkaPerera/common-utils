@@ -3,7 +3,7 @@
 
     <groupId>com.learn</groupId>
     <artifactId>common-utils</artifactId>
-    <version>0.0.17-tba148-SNAPSHOT</version>
+    <version>0.0.18</version>
     <packaging>jar</packaging>
 
     <properties>
