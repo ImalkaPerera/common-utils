@@ -1,9 +1,6 @@
-name: Build and Deploy common-utils
-
-# This workflow builds, tests, bumps version, and deploys the Maven Project when changes occur in the Maven Project folder.
+name: Release Deploy
 
 on:
-# Trigger only when changes are made in the Maven Project folder
   push:
     branches:
       - main
