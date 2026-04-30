@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'Maven Project/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Maven Project/**'
 
 jobs:
   build:
