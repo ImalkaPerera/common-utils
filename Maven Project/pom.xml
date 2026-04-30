@@ -3,7 +3,7 @@
 
     <groupId>com.learn</groupId>
     <artifactId>common-utils</artifactId>
-    <version>0.0.21-tbc-2004-SNAPSHOT</version>
+    <version>0.0.21</version>
     <packaging>jar</packaging>
 
     <properties>
