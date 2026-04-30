@@ -10,13 +10,9 @@ on:
 
 jobs:
   build:
+    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Skip if main branch
-        if: github.ref == 'refs/heads/main'
-        run: |
-          echo "This workflow does not run on main branch."
-          exit 0
       - name: Checkout code
         uses: actions/checkout@v3
 
