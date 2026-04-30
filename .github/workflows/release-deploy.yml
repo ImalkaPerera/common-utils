@@ -32,8 +32,11 @@ jobs:
           mvn clean verify
 
 
-      # Step 2: Increment patch version and set as release
+
+
+      # Step 2: Increment patch version and set as release (only on push)
       - name: Bump Maven version to next release
+        if: github.event_name == 'push'
         run: |
           cd "Maven Project"
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
@@ -48,8 +51,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 3: Commit and push the release version bump to the repository
+      # Step 2b: On PR merge, set version to version number only (strip branch name and -SNAPSHOT)
+      - name: Set release version on PR merge
+        if: github.event_name == 'pull_request'
+        run: |
+          cd "Maven Project"
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          # Remove -SNAPSHOT and any branch name suffix
+          VERSION_CLEAN=$(echo "$VERSION" | sed -E 's/-[A-Za-z0-9\-]+-SNAPSHOT//; s/-SNAPSHOT//')
+          mvn --batch-mode versions:set -DnewVersion=$VERSION_CLEAN
+          mvn --batch-mode versions:commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Commit and push the release version bump to the repository (on push or PR merge)
       - name: Commit and push release version bump
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         run: |
           git add "Maven Project/pom.xml"
           git commit -m "ci: set release version [skip ci]" || echo "No changes to commit"
