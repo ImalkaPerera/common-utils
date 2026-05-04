@@ -3,10 +3,13 @@ name: Feature Snapshot Deploy
 on:
   push:
     branches:
-      - '*'
-      - '**'
+      - 'feature/**'
     paths:
       - 'Maven Project/**'
+
+concurrency:
+  group: feature-snapshot-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -103,20 +106,10 @@ jobs:
         run: |
           git add "Maven Project/pom.xml"
           git commit -m "ci: set version with branch name [skip ci]" || echo "No changes to commit"
-          n=0
-          until [ $n -ge 3 ]
-          do
-            git pull --rebase origin ${GITHUB_REF##*/} && break
-            n=$((n+1))
-            sleep 2
-          done
-          n=0
-          until [ $n -ge 3 ]
-          do
-            git push origin HEAD:${GITHUB_REF##*/} && break
-            n=$((n+1))
-            sleep 2
-          done
+          git push origin HEAD:${GITHUB_REF#refs/heads/} || {
+            echo "Push failed. Please pull the latest changes, resolve any conflicts, and push again manually.";
+            exit 1;
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
