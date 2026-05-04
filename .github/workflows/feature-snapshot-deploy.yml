@@ -9,6 +9,7 @@ on:
       - 'Maven Project/**'
 
 jobs:
+
   build:
     if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -21,46 +22,69 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Step 1: Build and test the Maven Project to ensure no errors before version bump
       - name: Java Build Check
         run: |
           cd "Maven Project"
           mvn clean verify
 
-      # Step 2: Extract branch name
       - name: Extract branch name
         id: extract_branch
         run: |
           BRANCH_NAME="${GITHUB_REF##*/}"
-          # Replace slashes with dashes for version compatibility
           BRANCH_NAME_SAFE=$(echo "$BRANCH_NAME" | sed 's#[^a-zA-Z0-9\-]#-#g')
           echo "branch_name=$BRANCH_NAME_SAFE" >> $GITHUB_OUTPUT
 
+      - name: Get main branch version
+        id: main_version
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          MAIN_VERSION=$(mvn -f "Maven Project/pom.xml" help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "main_version=$MAIN_VERSION" >> $GITHUB_OUTPUT
 
 
-      # Step 3: Check and bump version only if needed
       - name: Check and bump version if needed
         id: version_bump
         run: |
           cd "Maven Project"
           CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          MAIN_VERSION="${{ steps.main_version.outputs.main_version }}"
           BRANCH_NAME="${{ steps.extract_branch.outputs.branch_name }}"
-          # Desired version pattern
+          # If version already has branch name, skip
           if [[ "$CURRENT_VERSION" == *"-$BRANCH_NAME-SNAPSHOT" ]]; then
             echo "skip_bump=true" >> $GITHUB_OUTPUT
             echo "Version already set for this branch. Skipping bump."
           else
-            VERSION_CLEAN=$(echo "$CURRENT_VERSION" | sed 's/-SNAPSHOT//')
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_CLEAN"
-            PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH-$BRANCH_NAME-SNAPSHOT"
-            mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
-            mvn --batch-mode versions:commit
-            echo "skip_bump=false" >> $GITHUB_OUTPUT
-            echo "Bumped version to $NEW_VERSION"
+            # Parse versions
+            parse_version() {
+              local ver=$1
+              ver=${ver%%-*} # Remove -SNAPSHOT or any suffix
+              IFS='.' read -r maj min pat <<< "$ver"
+              echo "$maj $min $pat"
+            }
+            read MAIN_MAJ MAIN_MIN MAIN_PAT <<< $(parse_version "$MAIN_VERSION")
+            read CURR_MAJ CURR_MIN CURR_PAT <<< $(parse_version "$CURRENT_VERSION")
+            # Compare versions
+            if (( CURR_MAJ < MAIN_MAJ )) || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN < MAIN_MIN )); } || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN == MAIN_MIN )) && (( CURR_PAT <= MAIN_PAT )); }; then
+              # Bump patch to be greater than main
+              NEW_MAJ=$MAIN_MAJ
+              NEW_MIN=$MAIN_MIN
+              NEW_PAT=$((MAIN_PAT + 1))
+              NEW_VERSION="$NEW_MAJ.$NEW_MIN.$NEW_PAT-$BRANCH_NAME-SNAPSHOT"
+              mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
+              mvn --batch-mode versions:commit
+              echo "skip_bump=false" >> $GITHUB_OUTPUT
+              echo "Bumped version to $NEW_VERSION (greater than main)"
+            else
+              # Current version is already greater than main, just add branch name
+              VERSION_CLEAN=$(echo "$CURRENT_VERSION" | sed 's/-SNAPSHOT//')
+              NEW_VERSION="$VERSION_CLEAN-$BRANCH_NAME-SNAPSHOT"
+              mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
+              mvn --batch-mode versions:commit
+              echo "skip_bump=false" >> $GITHUB_OUTPUT
+              echo "Set version to $NEW_VERSION (already greater than main)"
+            fi
           fi
 
-      # Step 4: Commit and push version bump if needed
       - name: Commit and push version bump
         if: steps.version_bump.outputs.skip_bump == 'false'
         run: |

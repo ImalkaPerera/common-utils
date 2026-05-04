@@ -35,7 +35,7 @@ jobs:
 
 
 
-      # Step 2: On push or PR to main, set version to version number only (strip branch name and -SNAPSHOT, no increment)
+      # Step 2: On push or PR to main, set version to version number only (strip branch name and -SNAPSHOT), do not increment
       - name: Set release version (no increment)
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         run: |
@@ -45,6 +45,7 @@ jobs:
           VERSION_CLEAN=$(echo "$VERSION" | sed -E 's/-[A-Za-z0-9\-]+-SNAPSHOT//; s/-SNAPSHOT//')
           mvn --batch-mode versions:set -DnewVersion=$VERSION_CLEAN
           mvn --batch-mode versions:commit
+          echo "Set main version to $VERSION_CLEAN"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
