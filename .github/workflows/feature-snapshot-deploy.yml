@@ -3,10 +3,13 @@ name: Feature Snapshot Deploy
 on:
   push:
     branches:
-      - '*'
-      - '**'
+      - 'feature/**'
     paths:
       - 'Maven Project/**'
+
+concurrency:
+  group: feature-snapshot-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -34,7 +37,8 @@ jobs:
           # Only extract code part if branch is feature/code-name
           if [[ "$BRANCH_REF" == refs/heads/feature/* ]]; then
             CODE_NAME="${BRANCH_REF#refs/heads/feature/}"
-            BRANCH_NAME_SAFE=$(echo "$CODE_NAME" | sed 's#[^a-zA-Z0-9\-]#-#g')
+            CODE_ONLY="${CODE_NAME%%-*}"
+            BRANCH_NAME_SAFE=$(echo "$CODE_ONLY" | sed 's#[^a-zA-Z0-9\-]#-#g')
           else
             BRANCH_NAME_SAFE=""
           fi
@@ -103,7 +107,10 @@ jobs:
         run: |
           git add "Maven Project/pom.xml"
           git commit -m "ci: set version with branch name [skip ci]" || echo "No changes to commit"
-          git push origin HEAD:${GITHUB_REF##*/}
+          git push origin HEAD:${GITHUB_REF#refs/heads/} || {
+            echo "Push failed. Please pull the latest changes, resolve any conflicts, and push again manually.";
+            exit 1;
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
