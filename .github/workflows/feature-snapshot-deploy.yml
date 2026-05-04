@@ -103,7 +103,20 @@ jobs:
         run: |
           git add "Maven Project/pom.xml"
           git commit -m "ci: set version with branch name [skip ci]" || echo "No changes to commit"
-          git push origin HEAD:${GITHUB_REF##*/}
+          n=0
+          until [ $n -ge 3 ]
+          do
+            git pull --rebase origin ${GITHUB_REF##*/} && break
+            n=$((n+1))
+            sleep 2
+          done
+          n=0
+          until [ $n -ge 3 ]
+          do
+            git push origin HEAD:${GITHUB_REF##*/} && break
+            n=$((n+1))
+            sleep 2
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
