@@ -103,6 +103,8 @@ jobs:
         run: |
           git add "Maven Project/pom.xml"
           git commit -m "ci: set version with branch name [skip ci]" || echo "No changes to commit"
+          # Pull latest changes from remote branch to avoid non-fast-forward errors
+          git pull --rebase origin ${GITHUB_REF##*/} || echo "No remote changes to rebase"
           git push origin HEAD:${GITHUB_REF##*/}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
