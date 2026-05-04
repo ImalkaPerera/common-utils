@@ -30,8 +30,14 @@ jobs:
       - name: Extract branch name
         id: extract_branch
         run: |
-          BRANCH_NAME="${GITHUB_REF##*/}"
-          BRANCH_NAME_SAFE=$(echo "$BRANCH_NAME" | sed 's#[^a-zA-Z0-9\-]#-#g')
+          BRANCH_REF="$GITHUB_REF"
+          # Only extract code part if branch is feature/code-name
+          if [[ "$BRANCH_REF" == refs/heads/feature/* ]]; then
+            CODE_NAME="${BRANCH_REF#refs/heads/feature/}"
+            BRANCH_NAME_SAFE=$(echo "$CODE_NAME" | sed 's#[^a-zA-Z0-9\-]#-#g')
+          else
+            BRANCH_NAME_SAFE=""
+          fi
           echo "branch_name=$BRANCH_NAME_SAFE" >> $GITHUB_OUTPUT
 
       - name: Get main branch version
@@ -48,41 +54,48 @@ jobs:
           cd "Maven Project"
           CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           MAIN_VERSION="${{ steps.main_version.outputs.main_version }}"
+          BRANCH_REF="$GITHUB_REF"
           BRANCH_NAME="${{ steps.extract_branch.outputs.branch_name }}"
-          # If version already has branch name, skip
-          if [[ "$CURRENT_VERSION" == *"-$BRANCH_NAME-SNAPSHOT" ]]; then
-            echo "skip_bump=true" >> $GITHUB_OUTPUT
-            echo "Version already set for this branch. Skipping bump."
-          else
-            # Parse versions
-            parse_version() {
-              local ver=$1
-              ver=${ver%%-*} # Remove -SNAPSHOT or any suffix
-              IFS='.' read -r maj min pat <<< "$ver"
-              echo "$maj $min $pat"
-            }
-            read MAIN_MAJ MAIN_MIN MAIN_PAT <<< $(parse_version "$MAIN_VERSION")
-            read CURR_MAJ CURR_MIN CURR_PAT <<< $(parse_version "$CURRENT_VERSION")
-            # Compare versions
-            if (( CURR_MAJ < MAIN_MAJ )) || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN < MAIN_MIN )); } || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN == MAIN_MIN )) && (( CURR_PAT <= MAIN_PAT )); }; then
-              # Bump patch to be greater than main
-              NEW_MAJ=$MAIN_MAJ
-              NEW_MIN=$MAIN_MIN
-              NEW_PAT=$((MAIN_PAT + 1))
-              NEW_VERSION="$NEW_MAJ.$NEW_MIN.$NEW_PAT-$BRANCH_NAME-SNAPSHOT"
-              mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
-              mvn --batch-mode versions:commit
-              echo "skip_bump=false" >> $GITHUB_OUTPUT
-              echo "Bumped version to $NEW_VERSION (greater than main)"
+          # Only bump if branch name starts with 'feature/'
+          if [[ "$BRANCH_REF" == refs/heads/feature/* ]]; then
+            # If version already has branch name, skip
+            if [[ "$CURRENT_VERSION" == *"-$BRANCH_NAME-SNAPSHOT" ]]; then
+              echo "skip_bump=true" >> $GITHUB_OUTPUT
+              echo "Version already set for this branch. Skipping bump."
             else
-              # Current version is already greater than main, just add branch name
-              VERSION_CLEAN=$(echo "$CURRENT_VERSION" | sed 's/-SNAPSHOT//')
-              NEW_VERSION="$VERSION_CLEAN-$BRANCH_NAME-SNAPSHOT"
-              mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
-              mvn --batch-mode versions:commit
-              echo "skip_bump=false" >> $GITHUB_OUTPUT
-              echo "Set version to $NEW_VERSION (already greater than main)"
+              # Parse versions
+              parse_version() {
+                local ver=$1
+                ver=${ver%%-*} # Remove -SNAPSHOT or any suffix
+                IFS='.' read -r maj min pat <<< "$ver"
+                echo "$maj $min $pat"
+              }
+              read MAIN_MAJ MAIN_MIN MAIN_PAT <<< $(parse_version "$MAIN_VERSION")
+              read CURR_MAJ CURR_MIN CURR_PAT <<< $(parse_version "$CURRENT_VERSION")
+              # Compare versions
+              if (( CURR_MAJ < MAIN_MAJ )) || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN < MAIN_MIN )); } || { (( CURR_MAJ == MAIN_MAJ )) && (( CURR_MIN == MAIN_MIN )) && (( CURR_PAT <= MAIN_PAT )); }; then
+                # Bump patch to be greater than main
+                NEW_MAJ=$MAIN_MAJ
+                NEW_MIN=$MAIN_MIN
+                NEW_PAT=$((MAIN_PAT + 1))
+                NEW_VERSION="$NEW_MAJ.$NEW_MIN.$NEW_PAT-$BRANCH_NAME-SNAPSHOT"
+                mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
+                mvn --batch-mode versions:commit
+                echo "skip_bump=false" >> $GITHUB_OUTPUT
+                echo "Bumped version to $NEW_VERSION (greater than main)"
+              else
+                # Current version is already greater than main, just add branch name
+                VERSION_CLEAN=$(echo "$CURRENT_VERSION" | sed 's/-SNAPSHOT//')
+                NEW_VERSION="$VERSION_CLEAN-$BRANCH_NAME-SNAPSHOT"
+                mvn --batch-mode versions:set -DnewVersion=$NEW_VERSION
+                mvn --batch-mode versions:commit
+                echo "skip_bump=false" >> $GITHUB_OUTPUT
+                echo "Set version to $NEW_VERSION (already greater than main)"
+              fi
             fi
+          else
+            echo "skip_bump=true" >> $GITHUB_OUTPUT
+            echo "Not a feature branch, skipping version bump."
           fi
 
       - name: Commit and push version bump
